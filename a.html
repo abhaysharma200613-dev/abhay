@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RF Integration Dashboard</title>
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js';
+    import { getFirestore, collection, setDoc, doc, deleteDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js';
+
+    // Replace with your Firebase config
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_PROJECT_ID.appspot.com",
+      messagingSenderId: "YOUR_SENDER_ID",
+      appId: "YOUR_APP_ID"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const runsRef = collection(db, 'rf_runs');
+
+    async function addRun(run){ await setDoc(doc(runsRef, run.id), run); }
+    async function deleteRun(id){ await deleteDoc(doc(runsRef, id)); }
+
+    const tbody = document.getElementById('tbody');
+    const totalRunsEl = document.getElementById('totalRuns');
+    const runningCountEl = document.getElementById('runningCount');
+    const completeCountEl = document.getElementById('completeCount');
+
+    const rfIdInput = document.getElementById('rfId');
+    const descInput = document.getElementById('desc');
+    const statusSelect = document.getElementById('statusSelect');
+    const modal = document.getElementById('modalBackdrop');
+
+    document.getElementById('openAdd').onclick = () => modal.style.display = 'flex';
+    document.getElementById('cancelBtn').onclick = () => modal.style.display = 'none';
+
+    document.getElementById('saveBtn').onclick = async () => {
+      const id = rfIdInput.value.trim();
+      const desc = descInput.value.trim();
+      const status = statusSelect.value;
+      if(!id) return alert('RF ID required');
+      await addRun({ id, desc, status, updated: new Date().toISOString() });
+      modal.style.display='none';
+    };
+
+    const badge = (status) => `<span class="badge ${status}">${status.toUpperCase()}</span>`;
+    const formatDate = (iso) => new Date(iso).toLocaleString();
+
+    function render(runs){
+      tbody.innerHTML = '';
+      runs.forEach(r => {
+        tbody.insertAdjacentHTML('beforeend', `
+          <tr>
+            <td><strong>${r.id}</strong></td>
+            <td>${r.desc || '-'}</td>
+            <td>${badge(r.status)}</td>
+            <td>${formatDate(r.updated)}</td>
+            <td><button class='delete' data-id='${r.id}'>🗑 Delete</button></td>
+          </tr>`);
+      });
+      document.querySelectorAll('.delete').forEach(b => b.onclick = e => deleteRun(e.target.dataset.id));
+      totalRunsEl.textContent = runs.length;
+      runningCountEl.textContent = runs.filter(r=>r.status==='running').length;
+      completeCountEl.textContent = runs.filter(r=>r.status==='complete').length;
+    }
+
+    onSnapshot(runsRef, snap => {
+      const data = snap.docs.map(d => d.data());
+      render(data);
+    });
+  </script>
+  <style>
+    :root{
+      --bg:#0a0f1e;--card:#141c2f;--accent:#7c3aed;--accent2:#06b6d4;--text:#e6eef8;--muted:#94a3b8;
+    }
+    *{box-sizing:border-box;font-family:'Inter',system-ui,sans-serif}
+    body{margin:0;background:linear-gradient(180deg,#070d1c,#101830);color:var(--text);min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:20px}
+
+    .header{display:flex;align-items:center;gap:15px;margin-bottom:24px}
+    .logo{width:60px;height:60px;border-radius:14px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-weight:900;font-size:20px;color:white;box-shadow:0 4px 16px rgba(0,0,0,0.3)}
+
+    h1{font-size:22px;margin:0}
+    p{color:var(--muted);margin:4px 0 0}
+
+    .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;width:100%;max-width:900px;margin-bottom:24px}
+    .kpi{background:var(--card);padding:16px;border-radius:14px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,0.2)}
+    .kpi .num{font-size:26px;font-weight:700;margin-top:4px;color:var(--accent2)}
+
+    button{cursor:pointer;border:none;border-radius:10px;padding:10px 14px;font-weight:600}
+    #openAdd{background:linear-gradient(90deg,var(--accent),var(--accent2));color:white;box-shadow:0 4px 14px rgba(0,0,0,0.4)}
+    #openAdd:hover{opacity:0.9}
+
+    table{width:100%;max-width:900px;border-collapse:collapse;background:var(--card);border-radius:14px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.3)}
+    th,td{padding:14px;text-align:left;border-bottom:1px solid rgba(255,255,255,0.05)}
+    th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em}
+    td{font-size:14px}
+
+    .badge{padding:5px 10px;border-radius:999px;font-weight:700;font-size:12px;color:#fff}
+    .badge.running{background:linear-gradient(90deg,#f59e0b,#fbbf24)}
+    .badge.pending{background:linear-gradient(90deg,#3b82f6,#60a5fa)}
+    .badge.complete{background:linear-gradient(90deg,#10b981,#34d399)}
+
+    .delete{background:#dc2626;color:white;border:none;padding:8px 12px;border-radius:8px;cursor:pointer;font-size:13px}
+    .delete:hover{background:#b91c1c}
+
+    #modalBackdrop{position:fixed;inset:0;background:rgba(0,0,0,0.6);display:none;align-items:center;justify-content:center}
+    .modal{background:var(--card);padding:24px;border-radius:16px;min-width:300px;max-width:400px;box-shadow:0 4px 20px rgba(0,0,0,0.4)}
+    .modal input, .modal select{width:100%;padding:10px;border:none;border-radius:10px;margin-top:8px;margin-bottom:12px;background:rgba(255,255,255,0.05);color:var(--text)}
+    .modal button{margin-right:10px}
+
+    @media(max-width:700px){body{padding:10px}table, .kpis{width:100%}}
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">RF</div>
+    <div>
+      <h1>RF Integration Dashboard</h1>
+      <p>Epic real-time dashboard with Firebase cloud sync</p>
+    </div>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi"><div>Total Runs</div><div id="totalRuns" class="num">0</div></div>
+    <div class="kpi"><div>Running</div><div id="runningCount" class="num">0</div></div>
+    <div class="kpi"><div>Complete</div><div id="completeCount" class="num">0</div></div>
+  </div>
+
+  <button id="openAdd">+ Add RF Run</button>
+
+  <table>
+    <thead>
+      <tr><th>ID</th><th>Description</th><th>Status</th><th>Updated</th><th>Actions</th></tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+
+  <div id="modalBackdrop">
+    <div class="modal">
+      <h3>Add RF Run</h3>
+      <input id="rfId" placeholder="RF ID"/>
+      <input id="desc" placeholder="Description"/>
+      <select id="statusSelect">
+        <option value="running">Running</option>
+        <option value="pending">Pending</option>
+        <option value="complete">Complete</option>
+      </select>
+      <div style="text-align:right">
+        <button id="cancelBtn">Cancel</button>
+        <button id="saveBtn">Save</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
